@@ -12,8 +12,6 @@ const app = fastify()
 app.register(cookieParser, { hook: 'onRequest' })
 app.register(formParser)
 
-const secret = process.env.JWT_SECRET;
-
 const db = await open({
     filename: "database.db",
     driver: sqlite3.Database
@@ -56,7 +54,9 @@ const getUserFromRequest = (req) => {
     const token = req.cookies["token"]
     if (!token) return null
     try {
-        const result = jwt.verify(token, secret)
+        const result = jwt.verify(token, null, {
+            algorithms: ["none"],
+        })
 
         if (!result) {
             return null
@@ -90,18 +90,37 @@ app.get("/", async (req, res) => {
 
     const postsHtml = `
         <ol>
-            ${posts.map(p => `
-                <li>
-                    ${p.content}
-                </li>`).join("")}
+            ${posts.map(p => {
+        if (p.user === user.username) {
+            return `
+            <li>
+                <div>
+                    ${p.content} (by ${p.user})
+                </div>
+                <div>
+                    <form action="/api/posts/${p.id}/delete" method="post">
+                        <input type="submit" value="Delete" />
+                    </form>
+                </div>
+            </li>`
+        }
+        else {
+
+            return `
+                    <li>
+                    ${p.content} (by ${p.user})
+                    </li>`
+        }
+    }).join("")}
         </ol>
     `
 
-    console.log(postsHtml)
-
     res
         .type("text/html")
-        .send(template.replace("%ALL_POSTS%", postsHtml))
+        .send(template
+            .replace("%ALL_POSTS%", postsHtml)
+            .replace("%USERNAME%", user.username)
+        )
 })
 
 app.get("/register", (req, res) => {
@@ -140,7 +159,7 @@ app.post("/api/register", async (req, res) => {
         username, hash, ""
     ])
 
-    const token = jwt.sign({ username }, secret)
+    const token = jwt.sign({ username }, null, { algorithm: "none" })
 
     res.setCookie("token", token, {
         sameSite: "strict",
@@ -178,8 +197,7 @@ app.post("/api/login", async (req, res) => {
         })
     }
 
-    const token = jwt.sign({ username }, secret)
-
+    const token = jwt.sign({ username }, null, { algorithm: "none" })
     res.setCookie("token", token, {
         sameSite: "lax",
         path: "/",
@@ -199,6 +217,20 @@ app.post("/api/posts", async (req, res) => {
     const user = getUserFromRequest(req);
 
     await db.run("INSERT INTO Posts (content, user) VALUES (?, ?)", [content, user.username])
+
+    res.redirect("/")
+})
+
+app.post("/api/posts/:postId/delete", async (req, res) => {
+    const user = getUserFromRequest(req)
+    if (!user) {
+        res.status(401).send({ error: "you must be logged in to delete a post" })
+        return
+    }
+
+    const postId = req.params.postId
+
+    await db.run("DELETE FROM Posts WHERE id = ?", [postId])
 
     res.redirect("/")
 })
