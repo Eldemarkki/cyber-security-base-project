@@ -26,11 +26,23 @@ if (!tableExists) {
         password_hash text,
         profile_picture_url text,
         PRIMARY KEY (username)
-        )`)
+    )`)
+
+    await db.exec(`CREATE TABLE Posts (
+        id integer primary key,
+        content text,
+        user text,
+        FOREIGN KEY(user) REFERENCES Users(username)
+    )`)
 }
 
 const getAllPosts = async () => {
+    /**
+     * @type {Array<{ id: number, content: string, user: string}>}
+     */
+    const result = await db.all("SELECT * FROM Posts")
 
+    return result
 }
 
 /**
@@ -66,16 +78,30 @@ const getUserFromRequest = (req) => {
     }
 }
 
-app.get("/", (req, res) => {
+app.get("/", async (req, res) => {
     const user = getUserFromRequest(req)
     if (!user) {
         res.redirect("/login")
         return
     }
 
+    const template = readFileSync("./src/pages/index.html").toString()
+    const posts = await getAllPosts()
+
+    const postsHtml = `
+        <ol>
+            ${posts.map(p => `
+                <li>
+                    ${p.content}
+                </li>`).join("")}
+        </ol>
+    `
+
+    console.log(postsHtml)
+
     res
-        .type("text/html")    
-        .send(`<p>welcome, ${user.username}</p>`)
+        .type("text/html")
+        .send(template.replace("%ALL_POSTS%", postsHtml))
 })
 
 app.get("/register", (req, res) => {
@@ -162,6 +188,19 @@ app.post("/api/login", async (req, res) => {
     })
 
     return res.redirect("/")
+})
+
+app.post("/api/posts", async (req, res) => {
+    const content = req.body.content || ""
+    if (typeof content !== "string") {
+        res.status(400).send({ error: "content must be a string" })
+    }
+
+    const user = getUserFromRequest(req);
+
+    await db.run("INSERT INTO Posts (content, user) VALUES (?, ?)", [content, user.username])
+
+    res.redirect("/")
 })
 
 app.listen({
