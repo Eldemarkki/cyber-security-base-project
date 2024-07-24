@@ -8,6 +8,7 @@ import fastify from "fastify"
 import formParser from "@fastify/formbody"
 import cookieParser from "@fastify/cookie"
 import PDFDocument from "pdfkit"
+import emailCheck from "node-email-check"
 
 const app = fastify()
 app.register(cookieParser, { hook: 'onRequest' })
@@ -21,17 +22,17 @@ const db = await open({
 const tableExists = (await db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='Users';"))?.name === "Users"
 if (!tableExists) {
     await db.exec(`CREATE TABLE Users (
-        username text,
+        email text,
         password_hash text,
         profile_picture_url text,
-        PRIMARY KEY (username)
+        PRIMARY KEY (email)
     )`)
 
     await db.exec(`CREATE TABLE Posts (
         id integer primary key,
         content text,
         user text,
-        FOREIGN KEY(user) REFERENCES Users(username)
+        FOREIGN KEY(user) REFERENCES Users(email)
     )`)
 }
 
@@ -44,10 +45,10 @@ const getAllPosts = async () => {
      *   profile_picture_url: string
      * }>}
      */
-    const result = await db.all("SELECT * FROM Posts LEFT JOIN Users ON Posts.user = Users.username")
+    const result = await db.all("SELECT * FROM Posts LEFT JOIN Users ON Posts.user = Users.email")
     for (const post of result) {
         delete post.password_hash
-        delete post.username
+        delete post.email
     }
 
     return result
@@ -101,7 +102,7 @@ app.get("/", async (req, res) => {
     const postsHtml = `
         <ol>
             ${posts.map(p => {
-        if (p.user === user.username) {
+        if (p.user === user.email) {
             return `
             <li>
                 <div>
@@ -129,7 +130,7 @@ app.get("/", async (req, res) => {
         .type("text/html")
         .send(template
             .replace("%ALL_POSTS%", postsHtml)
-            .replace("%USERNAME%", user.username)
+            .replace("%EMAIL%", user.email)
         )
 })
 
@@ -149,7 +150,7 @@ app.post("/api/register", async (req, res) => {
     /**
      * @type {unknown}
      */
-    const username = req.body["username"] || ""
+    const email = req.body["email"] || ""
     /**
      * @type {unknown}
      */
@@ -159,21 +160,29 @@ app.post("/api/register", async (req, res) => {
      */
     const profilePictureUrl = req.body["profile_picture_url"] || ""
 
-    if (typeof username !== "string" || typeof password !== "string" || typeof profilePictureUrl !== "string") {
+    if (typeof email !== "string" || typeof password !== "string" || typeof profilePictureUrl !== "string") {
         res.send({
-            error: "username and password must both be strings"
+            error: "email and password must both be strings"
         })
 
         return
     }
 
+    const isValid = emailCheck.isValidSync(email)
+    if (!isValid) {
+        res.send({
+            error: "email must be a valid email address"
+        })
+        return
+    }
+
     const hash = bcrypt.hashSync(password)
 
-    await db.run("INSERT INTO Users (username, password_hash, profile_picture_url) VALUES (?,?,?)", [
-        username, hash, profilePictureUrl
+    await db.run("INSERT INTO Users (email, password_hash, profile_picture_url) VALUES (?,?,?)", [
+        email, hash, profilePictureUrl
     ])
 
-    const token = jwt.sign({ username }, null, { algorithm: "none" })
+    const token = jwt.sign({ email }, null, { algorithm: "none" })
 
     res.setCookie("token", token, {
         sameSite: "strict",
@@ -189,21 +198,21 @@ app.post("/api/login", async (req, res) => {
     /**
      * @type {unknown}
      */
-    const username = req.body["username"] || ""
+    const email = req.body["email"] || ""
     /**
      * @type {unknown}
      */
     const password = req.body["password"] || ""
 
-    if (typeof username !== "string" || typeof password !== "string") {
+    if (typeof email !== "string" || typeof password !== "string") {
         res.send({
-            error: "username and password must both be strings"
+            error: "email and password must both be strings"
         })
 
         return
     }
 
-    const matchingUser = await db.get("SELECT * FROM Users WHERE username = ?", [username])
+    const matchingUser = await db.get("SELECT * FROM Users WHERE email = ?", [email])
 
     if (!matchingUser || !bcrypt.compareSync(password, matchingUser.password_hash)) {
         res.send({
@@ -211,7 +220,7 @@ app.post("/api/login", async (req, res) => {
         })
     }
 
-    const token = jwt.sign({ username }, null, { algorithm: "none" })
+    const token = jwt.sign({ email }, null, { algorithm: "none" })
     res.setCookie("token", token, {
         sameSite: "lax",
         path: "/",
@@ -230,7 +239,7 @@ app.post("/api/posts", async (req, res) => {
 
     const user = getUserFromRequest(req);
 
-    await db.run("INSERT INTO Posts (content, user) VALUES (?, ?)", [content, user.username])
+    await db.run("INSERT INTO Posts (content, user) VALUES (?, ?)", [content, user.email])
 
     res.redirect("/")
 })
