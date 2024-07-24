@@ -238,6 +238,9 @@ app.post("/api/posts", async (req, res) => {
     }
 
     const user = getUserFromRequest(req);
+    if (!user) {
+        res.status(401).send({ error: "you must be logged in to create posts" })
+    }
 
     await db.run("INSERT INTO Posts (content, user) VALUES (?, ?)", [content, user.email])
 
@@ -259,6 +262,12 @@ app.post("/api/posts/:postId/delete", async (req, res) => {
 })
 
 app.get("/api/posts/export", async (req, res) => {
+    const user = getUserFromRequest(req)
+    if (!user) {
+        res.status(401).send({ error: "you must be logged in to export all posts as pdf" })
+        return
+    }
+
     const doc = new PDFDocument();
 
     doc.fontSize(18)
