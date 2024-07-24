@@ -4,7 +4,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node --watch --env-file=.env.local src/index.js"
+    "start": "node --watch src/index.js"
   },
   "author": "",
   "license": "ISC",
@@ -15,6 +15,7 @@
     "bcryptjs": "^2.4.3",
     "fastify": "^4.28.1",
     "jsonwebtoken": "^9.0.2",
+    "pdfkit": "^0.15.0",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
   }

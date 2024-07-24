@@ -13,12 +13,22 @@
         <label for="username-input">
             Username
         </label>
-        <input id="username-input" type="text" name="username" />
+        <input id="username-input" type="text" name="username" required />
 
         <label for="password-input">
             Password
         </label>
-        <input type="password" name="password" />
+        <input type="password" name="password" required />
+
+        <label for="profile-picture-select">
+            Profile picture
+        </label>
+        <select id="profile-picture-select" name="profile_picture_url" size="3" required>
+            <option value="./images/alien.jpg">Alien</option>
+            <option value="./images/flower.jpg">Flower</option>
+            <option value="./images/guitar.jpg">Guitar</option>
+        </select>
+
         <input type="submit" />
     </form>
 </body>

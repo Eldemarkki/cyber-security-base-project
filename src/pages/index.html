@@ -10,6 +10,9 @@
 <body>
     <h1>Posts</h1>
     <p>Logged in as %USERNAME%</p>
+    <form action="/api/posts/export" method="get">
+        <input type="submit" value="Combine posts into a PDF file" />
+    </form>
     <main>
         <form action="/api/posts" method="POST">
             <label for="content-input">Content</label>

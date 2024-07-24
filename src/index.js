@@ -7,6 +7,7 @@ import sqlite3 from "sqlite3"
 import fastify from "fastify"
 import formParser from "@fastify/formbody"
 import cookieParser from "@fastify/cookie"
+import PDFDocument from "pdfkit"
 
 const app = fastify()
 app.register(cookieParser, { hook: 'onRequest' })
@@ -36,9 +37,18 @@ if (!tableExists) {
 
 const getAllPosts = async () => {
     /**
-     * @type {Array<{ id: number, content: string, user: string}>}
+     * @type {Array<{ 
+     *   id: number, 
+     *   content: string, 
+     *   user: string,
+     *   profile_picture_url: string
+     * }>}
      */
-    const result = await db.all("SELECT * FROM Posts")
+    const result = await db.all("SELECT * FROM Posts LEFT JOIN Users ON Posts.user = Users.username")
+    for (const post of result) {
+        delete post.password_hash
+        delete post.username
+    }
 
     return result
 }
@@ -144,8 +154,12 @@ app.post("/api/register", async (req, res) => {
      * @type {unknown}
      */
     const password = req.body["password"] || ""
+    /**
+     * @type {unknown}
+     */
+    const profilePictureUrl = req.body["profile_picture_url"] || ""
 
-    if (typeof username !== "string" || typeof password !== "string") {
+    if (typeof username !== "string" || typeof password !== "string" || typeof profilePictureUrl !== "string") {
         res.send({
             error: "username and password must both be strings"
         })
@@ -156,7 +170,7 @@ app.post("/api/register", async (req, res) => {
     const hash = bcrypt.hashSync(password)
 
     await db.run("INSERT INTO Users (username, password_hash, profile_picture_url) VALUES (?,?,?)", [
-        username, hash, ""
+        username, hash, profilePictureUrl
     ])
 
     const token = jwt.sign({ username }, null, { algorithm: "none" })
@@ -233,6 +247,27 @@ app.post("/api/posts/:postId/delete", async (req, res) => {
     await db.run("DELETE FROM Posts WHERE id = ?", [postId])
 
     res.redirect("/")
+})
+
+app.get("/api/posts/export", async (req, res) => {
+    const doc = new PDFDocument();
+
+    doc.fontSize(18)
+    doc.text('All posts', 50, 100);
+
+    doc.fontSize(12)
+    const posts = await getAllPosts();
+    posts.forEach((post, i) => {
+        doc.image(post.profile_picture_url, 50, i * 30 + 130, {
+            height: 20,
+            width: 20,
+        })
+        doc.text(post.user + ": " + post.content, 80, i * 30 + 135)
+    })
+
+    doc.end();
+
+    await res.send(doc)
 })
 
 app.listen({
