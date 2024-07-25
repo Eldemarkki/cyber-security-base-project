@@ -168,13 +168,21 @@ app.post("/api/register", async (req, res) => {
         return
     }
 
-    const isValid = emailCheck.isValidSync(email)
-    if (!isValid) {
+    const isValidEmail = emailCheck.isValidSync(email)
+    if (!isValidEmail) {
         res.send({
             error: "email must be a valid email address"
         })
         return
     }
+
+    // const isValidProfilePicture = ["./images/alien.jpg", "./images/flower.jpg", "./images/guitar.jpg"].includes(profilePictureUrl)
+    // if (!isValidProfilePicture) {
+    //     res.send({
+    //         error: "profile picture must be either alien, flower or guitar"
+    //     })
+    //     return
+    // }
 
     const hash = bcrypt.hashSync(password)
 
@@ -257,6 +265,7 @@ app.post("/api/posts/:postId/delete", async (req, res) => {
     const postId = req.params.postId
 
     await db.run("DELETE FROM Posts WHERE id = ?", [postId])
+    // await db.run("DELETE FROM Posts WHERE id = ? AND user = ?", [postId, user.email])
 
     res.redirect("/")
 })
