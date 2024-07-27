@@ -12,7 +12,7 @@ import emailCheck from "node-email-check"
 import sanitize from "sanitize-html"
 import { validate } from "email-validator"
 
-const enableFixedCode = true;
+const enableFixedCode = false;
 
 const secret = enableFixedCode ? crypto.randomUUID() : null
 
