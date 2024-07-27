@@ -9,6 +9,12 @@ import formParser from "@fastify/formbody"
 import cookieParser from "@fastify/cookie"
 import PDFDocument from "pdfkit"
 import emailCheck from "node-email-check"
+import sanitize from "sanitize-html"
+import { validate } from "email-validator"
+
+const enableFixedCode = true;
+
+const secret = enableFixedCode ? crypto.randomUUID() : null
 
 const app = fastify()
 app.register(cookieParser, { hook: 'onRequest' })
@@ -65,9 +71,9 @@ const getUserFromRequest = (req) => {
     const token = req.cookies["token"]
     if (!token) return null
     try {
-        const result = jwt.verify(token, null, {
-            algorithms: ["none"],
-        })
+        const result = enableFixedCode ?
+            jwt.verify(token, secret) :
+            jwt.verify(token, secret, { algorithms: ["none"] })
 
         if (!result) {
             return null
@@ -106,7 +112,7 @@ app.get("/", async (req, res) => {
             return `
             <li>
                 <div>
-                    ${p.content} (by ${p.user})
+                    ${enableFixedCode ? sanitize(p.content) : p.content} (by ${p.user})
                 </div>
                 <div>
                     <form action="/api/posts/${p.id}/delete" method="post">
@@ -119,7 +125,7 @@ app.get("/", async (req, res) => {
 
             return `
                     <li>
-                    ${p.content} (by ${p.user})
+                    ${enableFixedCode ? sanitize(p.content) : p.content} (by ${p.user})
                     </li>`
         }
     }).join("")}
@@ -168,7 +174,10 @@ app.post("/api/register", async (req, res) => {
         return
     }
 
-    const isValidEmail = emailCheck.isValidSync(email)
+    const isValidEmail = enableFixedCode ?
+        validate(email) :
+        emailCheck.isValidSync(email)
+
     if (!isValidEmail) {
         res.send({
             error: "email must be a valid email address"
@@ -176,13 +185,15 @@ app.post("/api/register", async (req, res) => {
         return
     }
 
-    // const isValidProfilePicture = ["./images/alien.jpg", "./images/flower.jpg", "./images/guitar.jpg"].includes(profilePictureUrl)
-    // if (!isValidProfilePicture) {
-    //     res.send({
-    //         error: "profile picture must be either alien, flower or guitar"
-    //     })
-    //     return
-    // }
+    if (enableFixedCode) {
+        const isValidProfilePicture = ["./images/alien.jpg", "./images/flower.jpg", "./images/guitar.jpg"].includes(profilePictureUrl)
+        if (!isValidProfilePicture) {
+            res.send({
+                error: "profile picture must be either alien, flower or guitar"
+            })
+            return
+        }
+    }
 
     const hash = bcrypt.hashSync(password)
 
@@ -190,7 +201,9 @@ app.post("/api/register", async (req, res) => {
         email, hash, profilePictureUrl
     ])
 
-    const token = jwt.sign({ email }, null, { algorithm: "none" })
+    const token = enableFixedCode ?
+        jwt.sign({ email }, secret) :
+        jwt.sign({ email }, secret, { algorithm: "none" })
 
     res.setCookie("token", token, {
         sameSite: "strict",
@@ -228,7 +241,10 @@ app.post("/api/login", async (req, res) => {
         })
     }
 
-    const token = jwt.sign({ email }, null, { algorithm: "none" })
+    const token = enableFixedCode ?
+        jwt.sign({ email }, secret) :
+        jwt.sign({ email }, secret, { algorithm: "none" })
+
     res.setCookie("token", token, {
         sameSite: "lax",
         path: "/",
@@ -264,8 +280,12 @@ app.post("/api/posts/:postId/delete", async (req, res) => {
 
     const postId = req.params.postId
 
-    await db.run("DELETE FROM Posts WHERE id = ?", [postId])
-    // await db.run("DELETE FROM Posts WHERE id = ? AND user = ?", [postId, user.email])
+    if (enableFixedCode) {
+        await db.run("DELETE FROM Posts WHERE id = ? AND user = ?", [postId, user.email])
+    }
+    else {
+        await db.run("DELETE FROM Posts WHERE id = ?", [postId])
+    }
 
     res.redirect("/")
 })
